@@ -37,20 +37,8 @@ body:
       label: Related Component
       options:
         - label: core
-          description: Core KV storage engine
-          value: component/core
         - label: index
-          description: Indexing system
-          value: component/index
         - label: transaction
-          description: Transaction handling and fsync logic
-          value: component/transaction
         - label: docs
-          description: Documentation or readme
-          value: component/docs
         - label: testing
-          description: Test suite or coverage
-          value: component/testing
         - label: ttl
-          description: Time-to-live or expiry logic
-          value: component/ttl
