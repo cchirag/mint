@@ -1,8 +1,9 @@
+---
 name: Feature Request / Task
 description: Track a new feature, enhancement, or technical task in Mint.
 title: "[FEATURE] <Short summary>"
 labels: ["type/feature"]
-assignees: []
+assignees: ["cchirag"]
 body:
   - type: markdown
     attributes:
