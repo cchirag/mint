@@ -1,0 +1,44 @@
+name: Feature Request / Task
+description: Track a new feature, enhancement, or technical task in Mint.
+title: "[FEATURE] <Short summary>"
+labels: ["type/feature"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 📌 Feature Request or Task
+        Describe the goal, user need, or technical purpose of this issue.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: "What is this feature or task about? What does it enable or solve?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed Design / Approach
+      placeholder: "How do you plan to implement it? B-tree mutation logic? TTL encoding?"
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      placeholder: "What must be true for this to be considered complete?"
+
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Related Component
+      options:
+        - label: core
+        - label: index
+        - label: transaction
+        - label: cli
+        - label: docs
+        - label: testing
+        - label: ttl
