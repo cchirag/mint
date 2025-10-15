@@ -25,7 +25,7 @@ type CacheNode struct {
 // The most recently accessed items are kept at the front of the list, while the least
 // recently accessed items are at the back and evicted when capacity is reached.
 type Cache struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	lookup map[int64]*CacheNode
 	head   *CacheNode
 	tail   *CacheNode
@@ -89,6 +89,7 @@ func (l *Cache) Set(id int64, data mmap.MMap) error {
 		err = node.data.Unmap()
 		delete(l.lookup, node.id)
 	}
+
 	node := &CacheNode{
 		id:   id,
 		data: data,
@@ -114,6 +115,7 @@ func (l *Cache) Set(id int64, data mmap.MMap) error {
 func (c *Cache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	var firstErr error
 	for _, value := range c.lookup {
 		if err := value.data.Unmap(); err != nil && firstErr == nil {
@@ -130,6 +132,7 @@ func (c *Cache) Close() error {
 
 // insertAtFront adds the given node to the front of the doubly-linked list,
 // immediately after the sentinel head node.
+// This is a thread-unsafe method
 func (l *Cache) insertAtFront(node *CacheNode) {
 	node.next = l.head.next
 	node.prev = l.head
@@ -139,6 +142,7 @@ func (l *Cache) insertAtFront(node *CacheNode) {
 
 // removeFromBack removes and returns the node at the back of the list
 // (the least recently used entry), just before the sentinel tail node.
+// This is a thread-unsafe method
 func (l *Cache) removeFromBack() *CacheNode {
 	last := l.tail.prev
 	last.prev.next = l.tail
@@ -150,6 +154,7 @@ func (l *Cache) removeFromBack() *CacheNode {
 // moveToFront moves the given node to the front of the doubly-linked list,
 // marking it as the most recently used entry. If the node is already at the front,
 // this is a no-op.
+// This is a thread-unsafe method
 func (l *Cache) moveToFront(node *CacheNode) {
 	if node == l.head.next {
 		return

@@ -2,6 +2,7 @@ package diskview
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/edsrzf/mmap-go"
 )
@@ -37,6 +38,7 @@ var DefaultConfig Config = Config{
 type DiskViewer struct {
 	cache *Cache
 	pager *Pager
+	mu    sync.Mutex
 }
 
 // New creates a new DiskViewer for the given source file.
@@ -61,6 +63,13 @@ func (d *DiskViewer) Read(id int64) (mmap.MMap, error) {
 		return data, nil
 	}
 
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if data, err := d.cache.Get(id); err == nil {
+		return data, nil
+	}
+
 	data, err := d.pager.GetPage(id)
 	if err != nil {
 		return nil, err
@@ -79,43 +88,39 @@ func (d *DiskViewer) Read(id int64) (mmap.MMap, error) {
 // It handles partial writes by continuing until the full page is written.
 // Returns the ID of the newly created page.
 func (d *DiskViewer) Create() (int64, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	remaining := d.pager.pageSize
-	offset := d.pager.PageCount() * int64(d.pager.pageSize)
+	count, err := d.pager.PageCount()
+	if err != nil {
+		return 0, err
+	}
+	offset := count * int64(d.pager.pageSize)
 
 	for remaining > 0 {
-		n, err := d.fill(remaining, offset)
-		if err != nil {
-			return 0, fmt.Errorf("failed to write page at offset %d: %w", offset, err)
+		n, e := d.pager.Write(remaining, offset)
+		if e != nil {
+			return 0, fmt.Errorf("failed to write page at offset %d: %w", offset, e)
 		}
 		remaining -= n
 		offset += int64(n)
 	}
 
-	if err := d.pager.RefreshInfo(); err != nil {
-		return 0, fmt.Errorf("failed to refresh file info: %w", err)
-	}
-	id := d.pager.PageCount() - 1
-
-	d.cache.Get(id)
-
-	return d.pager.PageCount() - 1, nil
-}
-
-// fill writes count zero bytes at the given offset.
-// Returns the number of bytes written and any error encountered.
-// May return a partial write count if an error occurs.
-func (d *DiskViewer) fill(count int, offset int64) (int, error) {
-	data := make([]byte, count)
-	n, err := d.pager.file.WriteAt(data, offset)
+	count, err = d.pager.PageCount()
 	if err != nil {
-		return n, err
+		return 0, err
 	}
-	return n, nil
+	id := count - 1
+
+	return id, nil
 }
 
 // Close releases all resources held by the DiskViewer.
 // This includes closing the underlying file and unmapping any cached pages.
 func (d *DiskViewer) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if err := d.cache.Close(); err != nil {
 		return err
 	}

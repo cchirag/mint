@@ -2,6 +2,7 @@ package diskview
 
 import (
 	"os"
+	"sync"
 
 	"github.com/edsrzf/mmap-go"
 )
@@ -12,8 +13,8 @@ import (
 type Pager struct {
 	source   string
 	file     *os.File
-	info     os.FileInfo
 	pageSize int
+	mu       sync.RWMutex
 }
 
 // NewPager creates a new Pager for the given source file.
@@ -25,17 +26,10 @@ func NewPager(source string) (*Pager, error) {
 		return nil, err
 	}
 
-	info, err := file.Stat()
-	if err != nil {
-		file.Close()
-		return nil, err
-	}
-
 	pager := &Pager{
 		source:   source,
 		file:     file,
 		pageSize: os.Getpagesize(),
-		info:     info,
 	}
 	return pager, nil
 }
@@ -44,6 +38,8 @@ func NewPager(source string) (*Pager, error) {
 // The returned mmap.MMap should be unmapped when no longer needed to avoid
 // resource leaks.
 func (p *Pager) GetPage(id int64) (mmap.MMap, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	offset := id * int64(p.pageSize)
 	region, err := mmap.MapRegion(p.file, p.pageSize, mmap.RDWR, 0, offset)
 	if err != nil {
@@ -54,23 +50,35 @@ func (p *Pager) GetPage(id int64) (mmap.MMap, error) {
 
 // PageCount returns the number of complete pages in the file.
 // Partial pages at the end are not counted.
-func (p *Pager) PageCount() int64 {
-	size := p.info.Size()
-	return size / int64(p.pageSize)
-}
-
-// RefreshInfo updates the cached file information.
-// This should be called after operations that change the file size.
-func (p *Pager) RefreshInfo() error {
+func (p *Pager) PageCount() (int64, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	info, err := p.file.Stat()
 	if err != nil {
-		return err
+		return 0, err
 	}
-	p.info = info
-	return nil
+	return info.Size() / int64(p.pageSize), nil
+}
+
+// Write writes count zero bytes at the given offset.
+// Returns the number of bytes written and any error encountered.
+// May return a partial write count if an error occurs.
+func (p *Pager) Write(count int, offset int64) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	data := make([]byte, count)
+	n, err := p.file.WriteAt(data, offset)
+	if err != nil {
+		return n, err
+	}
+
+	return n, nil
 }
 
 // Close closes the underlying file.
 func (p *Pager) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	return p.file.Close()
 }
